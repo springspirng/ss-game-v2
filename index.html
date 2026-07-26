@@ -84,7 +84,7 @@
     <div class="row" style="margin-top:8px"><span class="k">翻轉次數</span><span class="v" id="flipCount">0</span></div>
     <div class="row"><span class="k">上次啟動結果</span><span class="v" id="gameResult">—</span></div>
 
-    <div class="slider"><label>翻轉門檻</label><input type="range" id="thr" min="90" max="180" value="150"><span class="val" id="thrVal">150°</span></div>
+    <div class="slider"><label>翻轉門檻</label><input type="range" id="thr" min="90" max="180" value="120"><span class="val" id="thrVal">120°</span></div>
     <div class="slider"><label>去抖時間</label><input type="range" id="deb" min="0" max="1000" step="50" value="400"><span class="val" id="debVal">400ms</span></div>
     <div class="stair">ttttttt&nbsp;&nbsp;uuuuuu&nbsp;&nbsp;rrrrrrr&nbsp;&nbsp;nnnnnn</div>
   </div>
@@ -104,7 +104,7 @@
   var gNow = {x:0,y:0,z:0}, gRef = null, haveMotion = false;
   var beta=null, gamma=null, alpha=null;
   var flipState = false, overSince = null, flipCount = 0;
-  var threshold = 150, debounceMs = 400;
+  var threshold = 120, debounceMs = 400;
   var countdownTimer = null, countdownEnd = 0, gameArmed = false;
   var lastMotionTs = 0;
 
