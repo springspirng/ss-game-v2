@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>M0 · 翻轉偵測探針 — Life need some BUG</title>
+<style>
+  :root{
+    --bg:#0A0A0A; --fg:#C8C8C8; --accent:#00FF66; --warn:#FFB000; --bad:#FF4D4D;
+    --dim:#555; --panel:#111;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);}
+  body{
+    font-family:"SF Mono","JetBrains Mono","Cascadia Code","Menlo","Consolas",monospace;
+    font-size:14px; line-height:1.5; padding:16px; -webkit-user-select:none; user-select:none;
+  }
+  h1{font-size:15px;color:var(--accent);margin:0 0 2px;letter-spacing:1px;}
+  .sub{color:var(--dim);font-size:12px;margin-bottom:14px;}
+  .panel{background:var(--panel);border:1px solid #222;border-radius:6px;padding:12px;margin-bottom:12px;}
+  .panel h2{font-size:12px;color:var(--warn);margin:0 0 8px;letter-spacing:1px;text-transform:uppercase;}
+  button{
+    font-family:inherit;font-size:14px;background:transparent;color:var(--accent);
+    border:1px solid var(--accent);border-radius:4px;padding:10px 14px;margin:4px 4px 4px 0;
+    cursor:pointer;-webkit-tap-highlight-color:transparent;
+  }
+  button:active{background:var(--accent);color:var(--bg);}
+  button.secondary{color:var(--fg);border-color:#444;}
+  button:disabled{opacity:.35;border-color:#333;color:#555;}
+  .row{display:flex;justify-content:space-between;gap:8px;padding:2px 0;}
+  .row .k{color:var(--dim);} .row .v{color:var(--fg);text-align:right;}
+  .big{font-size:44px;text-align:center;letter-spacing:2px;margin:6px 0;}
+  #angleBig{color:var(--accent);}
+  #flipBig{font-size:22px;text-align:center;padding:10px;border-radius:6px;border:1px dashed #333;margin-top:6px;}
+  .flip-yes{color:var(--bg)!important;background:var(--accent);border-color:var(--accent)!important;}
+  .flip-no{color:var(--dim);}
+  .count{font-size:32px;text-align:center;color:var(--accent);}
+  #countWrap{display:none;}
+  .slider{display:flex;align-items:center;gap:10px;margin:6px 0;}
+  .slider label{color:var(--dim);width:96px;font-size:12px;}
+  input[type=range]{flex:1;accent-color:var(--accent);}
+  .slider .val{width:56px;text-align:right;color:var(--fg);}
+  #log{background:#000;border:1px solid #222;border-radius:4px;padding:8px;height:140px;
+    overflow-y:auto;font-size:11px;color:#9a9a9a;white-space:pre-wrap;word-break:break-all;}
+  .note{color:var(--dim);font-size:11px;margin-top:6px;}
+  .ok{color:var(--accent);} .warnc{color:var(--warn);} .badc{color:var(--bad);}
+  .stair{color:var(--accent);letter-spacing:2px;font-size:12px;opacity:.5;text-align:center;margin-top:4px;}
+</style>
+</head>
+<body>
+  <h1>M0 · 翻轉偵測探針</h1>
+  <div class="sub">Life need some BUG — 驗證「相對翻轉」在真機上正拿/反拿準不準</div>
+
+  <div class="panel">
+    <button id="startBtn">▼ START（授權感測器）</button>
+    <div class="row"><span class="k">平台判定</span><span class="v" id="platform">—</span></div>
+    <div class="row"><span class="k">感測器權限</span><span class="v" id="permState">尚未請求</span></div>
+    <div class="row"><span class="k">事件狀態</span><span class="v" id="evtState">—</span></div>
+    <div class="note">iOS 必須點 START（使用者手勢）才能請求權限；HTTPS 下才有效。</div>
+  </div>
+
+  <div class="panel">
+    <h2>即時感測器讀值</h2>
+    <div class="row"><span class="k">orientation β / γ / α</span><span class="v" id="ori">—</span></div>
+    <div class="row"><span class="k">gravity x / y / z</span><span class="v" id="grav">—</span></div>
+    <div class="row"><span class="k">screen.orientation</span><span class="v" id="scr">—</span></div>
+  </div>
+
+  <div class="panel">
+    <h2>相對翻轉判定（核心）</h2>
+    <button id="gameBtn" disabled>校準並開始 5 秒倒數（模擬遊戲）</button>
+    <button id="calBtn" class="secondary" disabled>只校準基準（自由測試）</button>
+    <button id="simBtn" class="secondary">模擬翻轉（桌機/無感測器）</button>
+
+    <div id="countWrap">
+      <div class="count" id="countNum">5</div>
+      <div class="note" style="text-align:center">倒數中 — 現在翻轉手機！</div>
+    </div>
+
+    <div class="row" style="margin-top:8px"><span class="k">基準 gRef</span><span class="v" id="ref">未校準</span></div>
+    <div class="big" id="angleBig">--°</div>
+    <div class="note" style="text-align:center">目前方向與基準的夾角（接近 180° = 已翻轉）</div>
+    <div id="flipBig" class="flip-no">FLIP: 未偵測</div>
+    <div class="row" style="margin-top:8px"><span class="k">翻轉次數</span><span class="v" id="flipCount">0</span></div>
+    <div class="row"><span class="k">上次啟動結果</span><span class="v" id="gameResult">—</span></div>
+
+    <div class="slider"><label>翻轉門檻</label><input type="range" id="thr" min="90" max="180" value="150"><span class="val" id="thrVal">150°</span></div>
+    <div class="slider"><label>去抖時間</label><input type="range" id="deb" min="0" max="1000" step="50" value="400"><span class="val" id="debVal">400ms</span></div>
+    <div class="stair">ttttttt&nbsp;&nbsp;uuuuuu&nbsp;&nbsp;rrrrrrr&nbsp;&nbsp;nnnnnn</div>
+  </div>
+
+  <div class="panel">
+    <h2>紀錄（可複製回報）</h2>
+    <div id="log"></div>
+    <button id="copyBtn" class="secondary">複製紀錄</button>
+    <button id="clearBtn" class="secondary">清除</button>
+    <div class="note">桌機測試：按空白鍵 = 模擬翻轉；把不同機種的門檻/延遲貼回來，就能校準參數。</div>
+  </div>
+
+<script>
+(function(){
+  "use strict";
+  // ---- 狀態 ----
+  var gNow = {x:0,y:0,z:0}, gRef = null, haveMotion = false;
+  var beta=null, gamma=null, alpha=null;
+  var flipState = false, overSince = null, flipCount = 0;
+  var threshold = 150, debounceMs = 400;
+  var countdownTimer = null, countdownEnd = 0, gameArmed = false;
+  var lastMotionTs = 0;
+
+  var $ = function(id){ return document.getElementById(id); };
+  function log(msg){
+    var t = new Date().toISOString().substr(11,12);
+    var el = $("log");
+    el.textContent += "["+t+"] "+msg+"\n";
+    el.scrollTop = el.scrollHeight;
+  }
+
+  // ---- 平台偵測 ----
+  var needsPerm = (typeof DeviceMotionEvent !== "undefined" &&
+                   typeof DeviceMotionEvent.requestPermission === "function");
+  $("platform").textContent = needsPerm ? "iOS 型（需授權）" : "Android/桌機型";
+  log("UA: " + navigator.userAgent);
+  log("需要感測器授權: " + needsPerm);
+
+  // ---- 向量數學 ----
+  function norm(v){
+    var m = Math.sqrt(v.x*v.x + v.y*v.y + v.z*v.z) || 1;
+    return {x:v.x/m, y:v.y/m, z:v.z/m};
+  }
+  function angleBetween(a,b){
+    var an = norm(a), bn = norm(b);
+    var d = an.x*bn.x + an.y*bn.y + an.z*bn.z;
+    if(d>1) d=1; if(d<-1) d=-1;
+    return Math.acos(d) * 180 / Math.PI;
+  }
+
+  // ---- 感測器事件 ----
+  function onMotion(e){
+    var g = e.accelerationIncludingGravity;
+    if(g && g.x !== null && g.x !== undefined){
+      gNow = {x:g.x, y:g.y, z:g.z};
+      haveMotion = true;
+      lastMotionTs = performance.now();
+    }
+    updateDisplay();
+    updateFlip();
+  }
+  function onOrient(e){
+    beta = e.beta; gamma = e.gamma; alpha = e.alpha;
+    // 若沒有 devicemotion 重力，改用 orientation 推導近似重力向量
+    if(!haveMotion && beta !== null){
+      var br = beta*Math.PI/180, gr = (gamma||0)*Math.PI/180;
+      gNow = { x: -Math.sin(gr),
+               y:  Math.sin(br)*Math.cos(gr),
+               z:  Math.cos(br)*Math.cos(gr) };
+    }
+    updateDisplay();
+    updateFlip();
+  }
+
+  function fmt(n){ return (n===null||n===undefined) ? "—" : n.toFixed(1); }
+  function updateDisplay(){
+    $("ori").textContent  = fmt(beta)+" / "+fmt(gamma)+" / "+fmt(alpha);
+    $("grav").textContent = fmt(gNow.x)+" / "+fmt(gNow.y)+" / "+fmt(gNow.z);
+    $("scr").textContent  = (screen.orientation && screen.orientation.type) || "(n/a)";
+  }
+
+  function updateFlip(){
+    if(!gRef) return;
+    var ang = angleBetween(gNow, gRef);
+    $("angleBig").textContent = ang.toFixed(0)+"°";
+    var now = performance.now();
+    if(ang >= threshold){
+      if(overSince === null) overSince = now;
+      if(now - overSince >= debounceMs && !flipState){
+        setFlip(true, ang);
+      }
+    } else {
+      overSince = null;
+      if(flipState && ang < threshold - 30){ // 遲滯，避免抖動
+        setFlip(false, ang);
+      }
+    }
+  }
+
+  function setFlip(on, ang){
+    flipState = on;
+    var el = $("flipBig");
+    if(on){
+      flipCount++;
+      $("flipCount").textContent = flipCount;
+      el.textContent = "FLIP: 已偵測 ✓  (" + ang.toFixed(0) + "°)";
+      el.className = "flip-yes";
+      log("翻轉偵測 ✓  角度=" + ang.toFixed(0) + "°  門檻=" + threshold + "  去抖=" + debounceMs + "ms");
+      if(gameArmed){
+        gameArmed = false;
+        $("gameResult").textContent = "✓ 啟動成功";
+        $("gameResult").className = "v ok";
+        log(">>> 5秒窗口內完成翻轉 → 啟動通關資格 ✓");
+      }
+    } else {
+      el.textContent = "FLIP: 未偵測";
+      el.className = "flip-no";
+      log("翻回基準側  角度=" + ang.toFixed(0) + "°");
+    }
+  }
+
+  // ---- 校準 ----
+  function captureRef(){
+    gRef = {x:gNow.x, y:gNow.y, z:gNow.z};
+    overSince = null;
+    if(flipState) setFlip(false, 0);
+    flipState = false;
+    $("ref").textContent = fmt(gRef.x)+" / "+fmt(gRef.y)+" / "+fmt(gRef.z);
+    log("校準基準 gRef = " + $("ref").textContent + "（不論正/反拿，此刻定為『正』）");
+  }
+
+  function startGameCountdown(){
+    captureRef();
+    gameArmed = true;
+    $("gameResult").textContent = "倒數中…";
+    $("gameResult").className = "v warnc";
+    $("countWrap").style.display = "block";
+    var secs = 5;
+    $("countNum").textContent = secs;
+    countdownEnd = performance.now() + 5000;
+    log("=== 開始 5 秒倒數（模擬遊戲啟動窗口）===");
+    clearInterval(countdownTimer);
+    countdownTimer = setInterval(function(){
+      secs--;
+      if(secs >= 0) $("countNum").textContent = secs;
+      if(secs <= 0){
+        clearInterval(countdownTimer);
+        $("countWrap").style.display = "none";
+        if(gameArmed){
+          gameArmed = false;
+          $("gameResult").textContent = "✗ 未翻轉 → 無盡下樓";
+          $("gameResult").className = "v badc";
+          log(">>> 窗口結束、未偵測到翻轉 → 進入無盡下樓模式 ✗");
+        }
+      }
+    }, 1000);
+  }
+
+  // ---- 桌機/無感測器模擬 ----
+  function simulateFlip(){
+    if(!gRef){
+      // 沒基準時給一個預設基準（手機直立）
+      gNow = {x:0, y:-9.8, z:0};
+      captureRef();
+    }
+    // 把 gNow 設為 gRef 的反向（相對 180°）或轉回
+    if(!flipState){
+      gNow = {x:-gRef.x, y:-gRef.y, z:-gRef.z};
+    } else {
+      gNow = {x:gRef.x, y:gRef.y, z:gRef.z};
+    }
+    // 立即通過去抖以便桌機測試
+    overSince = performance.now() - debounceMs - 1;
+    updateDisplay();
+    updateFlip();
+  }
+
+  // ---- 啟動授權 ----
+  function addListeners(){
+    window.addEventListener("devicemotion", onMotion, true);
+    window.addEventListener("deviceorientation", onOrient, true);
+    if(screen.orientation && screen.orientation.addEventListener){
+      screen.orientation.addEventListener("change", updateDisplay);
+    }
+    $("gameBtn").disabled = false;
+    $("calBtn").disabled = false;
+    $("evtState").textContent = "監聽中…";
+    // 監看事件是否真的有進來
+    setTimeout(function(){
+      if(!haveMotion && beta === null){
+        $("evtState").textContent = "⚠ 未收到感測器事件";
+        $("evtState").className = "v warnc";
+        log("⚠ 1.5 秒內未收到感測器事件：可能是桌機、非 HTTPS、或裝置不支援。可用『模擬翻轉』測流程。");
+      } else {
+        $("evtState").textContent = haveMotion ? "✓ devicemotion 有重力" : "✓ 僅 orientation（推導重力）";
+        $("evtState").className = "v ok";
+        log("感測器事件正常。haveMotion=" + haveMotion);
+      }
+    }, 1500);
+  }
+
+  function start(){
+    var reqs = [];
+    try{
+      if(typeof DeviceMotionEvent !== "undefined" && typeof DeviceMotionEvent.requestPermission === "function"){
+        reqs.push(DeviceMotionEvent.requestPermission().then(function(s){ log("DeviceMotion 權限: "+s); return s; }));
+      }
+      if(typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function"){
+        reqs.push(DeviceOrientationEvent.requestPermission().then(function(s){ log("DeviceOrientation 權限: "+s); return s; }));
+      }
+    }catch(err){ log("權限請求例外: " + err); }
+
+    if(reqs.length){
+      Promise.all(reqs).then(function(states){
+        var granted = states.every(function(s){ return s === "granted"; });
+        $("permState").textContent = granted ? "已授權 ✓" : "部分/拒絕";
+        $("permState").className = granted ? "v ok" : "v badc";
+        if(!granted) log("⚠ 未全部授權：iOS 需在設定重新允許，或重新整理再試。");
+        addListeners();
+      }).catch(function(err){
+        $("permState").textContent = "請求失敗";
+        $("permState").className = "v badc";
+        log("權限 Promise 失敗: " + err);
+        addListeners();
+      });
+    } else {
+      $("permState").textContent = "免授權（直接監聽）";
+      $("permState").className = "v ok";
+      addListeners();
+    }
+  }
+
+  // ---- 綁定 UI ----
+  $("startBtn").addEventListener("click", start);
+  $("gameBtn").addEventListener("click", startGameCountdown);
+  $("calBtn").addEventListener("click", captureRef);
+  $("simBtn").addEventListener("click", simulateFlip);
+  $("copyBtn").addEventListener("click", function(){
+    var txt = $("log").textContent;
+    if(navigator.clipboard){ navigator.clipboard.writeText(txt).then(function(){ log("已複製到剪貼簿"); }); }
+    else { log("此環境不支援自動複製，請手動選取。"); }
+  });
+  $("clearBtn").addEventListener("click", function(){ $("log").textContent = ""; });
+
+  $("thr").addEventListener("input", function(e){ threshold = +e.target.value; $("thrVal").textContent = threshold+"°"; });
+  $("deb").addEventListener("input", function(e){ debounceMs = +e.target.value; $("debVal").textContent = debounceMs+"ms"; });
+
+  document.addEventListener("keydown", function(e){
+    if(e.code === "Space" || e.key === " "){ e.preventDefault(); simulateFlip(); }
+  });
+
+  log("探針就緒。請點 ▼ START 開始。");
+})();
+</script>
+</body>
+</html>
