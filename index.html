@@ -16,6 +16,7 @@
   .overlay{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
     color:#C8C8C8;text-align:center;padding:24px;z-index:10;}
   .overlay.hidden{display:none;}
+  .overlay.flip180{transform:rotate(180deg);}
   h1{color:var(--char);font-size:26px;letter-spacing:2px;margin-bottom:6px;}
   .tag{color:var(--wall);font-size:13px;margin-bottom:28px;letter-spacing:1px;}
   button{font-family:inherit;font-size:18px;background:transparent;color:var(--char);
@@ -307,10 +308,14 @@
 
   function doWin(){ state="win";
     document.getElementById("winBody").innerHTML="你發現了：往下不是唯一的方向。<br>有些 bug，是通往出口的門。";
-    document.getElementById("winScreen").classList.remove("hidden"); }
+    var ws=document.getElementById("winScreen");
+    ws.classList.toggle("flip180",upsideDown);   // 手機顛倒時文字也轉正
+    ws.classList.remove("hidden"); }
   function gameOver(){ state="over";
     document.getElementById("overBody").innerHTML=(climbing?("爬到 "+floor+"F"):("下降到 B"+floor))+"<br>五滴血用完了。";
-    document.getElementById("overScreen").classList.remove("hidden"); }
+    var os=document.getElementById("overScreen");
+    os.classList.toggle("flip180",upsideDown);
+    os.classList.remove("hidden"); }
 
   // 輸入
   function press(e){ if(state!=="play")return; var x=(e.touches?e.touches[0].clientX:e.clientX); moveDir=(x<window.innerWidth/2)?-1:1; }
