@@ -5,15 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Life need some BUG</title>
 <style>
-  :root{ --bg:#000; --wall:#3B6EF5; --plat:#FFFFFF; --char:#FFD400; --hud:#4FC3F7; }
+  :root{ --bg:#000; --wall:#3B6EF5; --plat:#FFFFFF; --char:#FFD400; --hud:#4FC3F7; --blood:#FF4D4D; }
   *{margin:0;padding:0;box-sizing:border-box;}
   html,body{height:100%;background:var(--bg);overflow:hidden;
     font-family:"SF Mono","JetBrains Mono","Menlo","Consolas",monospace;
     -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;touch-action:none;}
   #wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;}
-  #game{display:block;background:var(--bg);transition:transform .45s ease;}
-  #game.flipped{transform:rotate(180deg);}
-  /* overlays */
+  #game{display:block;background:var(--bg);}
   .overlay{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
     color:#C8C8C8;text-align:center;padding:24px;z-index:10;}
   .overlay.hidden{display:none;}
@@ -22,109 +20,98 @@
   button{font-family:inherit;font-size:18px;background:transparent;color:var(--char);
     border:1px solid var(--char);border-radius:6px;padding:14px 30px;cursor:pointer;letter-spacing:2px;}
   button:active{background:var(--char);color:#000;}
-  .hint{color:#666;font-size:12px;margin-top:24px;line-height:1.7;max-width:280px;}
+  .hint{color:#666;font-size:12px;margin-top:24px;line-height:1.7;max-width:290px;}
   #countNum{font-size:96px;color:var(--char);line-height:1;}
   #countMsg{color:var(--hud);font-size:15px;margin-top:14px;letter-spacing:1px;}
   #countHint{color:#555;font-size:12px;margin-top:8px;}
-  #winTitle{color:var(--char);font-size:30px;letter-spacing:2px;}
-  #winBody{color:#C8C8C8;font-size:15px;margin-top:18px;line-height:1.8;max-width:300px;}
+  .big{font-size:30px;letter-spacing:2px;}
+  #winTitle{color:var(--char);} #overTitle{color:var(--blood);}
+  .body{color:#C8C8C8;font-size:15px;margin-top:18px;line-height:1.8;max-width:300px;}
 </style>
 </head>
 <body>
   <div id="wrap"><canvas id="game"></canvas></div>
 
-  <!-- 標題 -->
   <div id="titleScreen" class="overlay">
     <h1>Life need some BUG</h1>
     <div class="tag">一個永遠下不完的樓梯</div>
     <button id="startBtn">▼ START</button>
-    <div class="hint">左右半邊點按＝移動<br>螢幕會倒數 5 秒…<br>試著找出「出口」</div>
+    <div class="hint">左右半邊點按＝移動<br>小心尖刺，五滴血用完就結束<br>試著找出「出口」…</div>
   </div>
 
-  <!-- 倒數 -->
   <div id="countScreen" class="overlay hidden">
     <div id="countNum">5</div>
-    <div id="countMsg">準備下樓…</div>
+    <div id="countMsg">以現在的拿法為基準…</div>
     <div id="countHint">t · u · r · n</div>
   </div>
 
-  <!-- 通關 -->
   <div id="winScreen" class="overlay hidden">
-    <div id="winTitle">69F · 出口</div>
-    <div id="winBody"></div>
+    <div id="winTitle" class="big">69F · 出口</div>
+    <div id="winBody" class="body"></div>
     <button id="againBtn" style="margin-top:26px;">再玩一次</button>
+  </div>
+
+  <div id="overScreen" class="overlay hidden">
+    <div id="overTitle" class="big">GAME OVER</div>
+    <div id="overBody" class="body"></div>
+    <button id="retryBtn" style="margin-top:26px;">再玩一次</button>
   </div>
 
 <script>
 (function(){
   "use strict";
-  var cv = document.getElementById("game");
-  var ctx = cv.getContext("2d");
-  var W=0,H=0, charW=0, cellH=0, fontSize=0, cols=0;
+  var cv=document.getElementById("game"), ctx=cv.getContext("2d");
+  var W=0,H=0,charW=0,cellH=0,fontSize=0,cols=0,wallW=0,bloodW=0;
 
-  // ---- 版面 / 尺寸 ----
   function resize(){
-    W = Math.min(window.innerWidth, 460);
-    H = window.innerHeight;
-    cv.width = W; cv.height = H;
-    fontSize = Math.max(14, Math.floor(W/24));
-    ctx.font = fontSize+"px monospace";
-    charW = ctx.measureText("M").width;
-    cellH = Math.round(fontSize*1.15);
-    cols = Math.floor(W/charW);
-    ctx.textBaseline = "top";
+    W=Math.min(window.innerWidth,460); H=window.innerHeight;
+    cv.width=W; cv.height=H;
+    fontSize=Math.max(14,Math.floor(W/24));
+    ctx.font=fontSize+"px monospace"; ctx.textBaseline="top";
+    charW=ctx.measureText("M").width;
+    cellH=Math.round(fontSize*1.15);
+    cols=Math.floor(W/charW);
+    wallW=ctx.measureText("[#]").width;
+    bloodW=ctx.measureText("血").width;
   }
-  window.addEventListener("resize", resize);
-  resize();
+  window.addEventListener("resize",resize); resize();
 
-  // ---- 遊戲參數 ----
-  var WALL = "[#]";
-  var wallW = 0;
-  var TURN = ["t","u","r","n"];
-  var G = 1300;           // 重力 px/s^2
-  var SCROLL0 = 70;       // 初始捲動速度
-  var MOVE = 230;         // 左右移動速度
-  var GAP = 0;            // 平台垂直間距（resize 後算）
-  var ceilingY = 0;
+  // 參數
+  var TURN=["t","u","r","n"];
+  var G=1600, SCROLL0=65, MOVE=240, GAP=0, ceilingY=0, MAXLIFE=5;
 
-  // ---- 狀態 ----
-  var state = "title";    // title | count | play | win
-  var reverse = false;    // 反向（上樓）模式
-  var armed = false;      // 倒數內是否已翻轉
-  var platforms = [];
-  var pid = 0, spawnN = 0;
-  var lastLanded = -1;
-  var floor = 0, score = 0, life = 0;
-  var scrollSpeed = SCROLL0;
-  var moveDir = 0;        // -1 / 0 / 1（裝置座標）
-  var char = {x:0,y:0,vy:0,onGround:false};
-  var lastT = 0, countEnd=0, countLeft=5, countTimer=null;
+  // 狀態
+  var state="title";
+  var flipped=false;        // 是否已翻轉（上樓模式）
+  var dirSign=1;            // +1 下樓  / -1 上樓
+  var platforms=[], pid=0, spawnN=0, lastLanded=-1;
+  var floor=0, score=0, life=MAXLIFE, scrollSpeed=SCROLL0;
+  var moveDir=0;
+  var char={x:0,y:0,vy:0,onGround:false};
+  var lastT=0, countLeft=5, countTimer=null, detectTimer=null;
+  var hurtCd=0, flipCandidate=0;
 
-  // ---- 感測器（翻轉判定：Y 軸符號 + 夾角 雙保險）----
-  var gNow={x:0,y:0,z:0}, gRef=null, refYSign=0, haveSensor=false;
-  function onMotion(e){
-    var g=e.accelerationIncludingGravity;
-    if(g && g.x!=null){ gNow={x:g.x,y:g.y,z:g.z}; haveSensor=true; }
-  }
+  // 感測器
+  var gNow={x:0,y:0,z:0}, gRef=null, refYSign=0, refReady=false, haveSensor=false;
+  function mag(g){return Math.hypot(g.x,g.y,g.z);}
+  function onMotion(e){var g=e.accelerationIncludingGravity; if(g&&g.x!=null){gNow={x:g.x,y:g.y,z:g.z}; haveSensor=true;}}
   function onOrient(e){
     if(!haveSensor && e.beta!=null){
       var br=e.beta*Math.PI/180, gr=(e.gamma||0)*Math.PI/180;
-      gNow={x:-Math.sin(gr), y:Math.sin(br)*Math.cos(gr), z:Math.cos(br)*Math.cos(gr)};
+      gNow={x:-Math.sin(gr),y:Math.sin(br)*Math.cos(gr),z:Math.cos(br)*Math.cos(gr)};
     }
   }
-  function captureRef(){ gRef={x:gNow.x,y:gNow.y,z:gNow.z}; refYSign = gNow.y>=0?1:-1; }
-  function angle(a,b){
-    var ma=Math.hypot(a.x,a.y,a.z)||1, mb=Math.hypot(b.x,b.y,b.z)||1;
-    var d=(a.x*b.x+a.y*b.y+a.z*b.z)/(ma*mb);
-    if(d>1)d=1; if(d<-1)d=-1; return Math.acos(d)*180/Math.PI;
+  function tryCaptureRef(){
+    if(!refReady && haveSensor && mag(gNow)>5){
+      gRef={x:gNow.x,y:gNow.y,z:gNow.z}; refYSign=gNow.y>=0?1:-1; refReady=true;
+    }
   }
-  function isFlipped(){
-    if(!gRef) return false;
-    // 主：裝置 Y 軸重力符號相對基準反轉，且量值夠大
-    var ySign = gNow.y>=0?1:-1;
-    if(refYSign!==0 && ySign!==refYSign && Math.abs(gNow.y)>4) return true;
-    // 備：3D 夾角（實測翻轉最大約 140°，門檻設 120）
-    if(angle(gNow,gRef)>120) return true;
+  function angleTo(a,b){var d=(a.x*b.x+a.y*b.y+a.z*b.z)/((mag(a)||1)*(mag(b)||1)); if(d>1)d=1;if(d<-1)d=-1; return Math.acos(d)*180/Math.PI;}
+  function sensorFlipped(){            // 相對基準是否已翻轉
+    if(!refReady) return false;
+    var ySign=gNow.y>=0?1:-1;
+    if(Math.abs(gRef.y)>4 && Math.abs(gNow.y)>4 && ySign!==refYSign) return true; // 主：Y 軸符號反轉
+    if(angleTo(gNow,gRef)>110) return true;                                        // 備：夾角
     return false;
   }
   function enableSensors(){
@@ -135,203 +122,226 @@
           DeviceOrientationEvent.requestPermission().catch(function(){});
       }
     }catch(e){}
-    window.addEventListener("devicemotion", onMotion, true);
-    window.addEventListener("deviceorientation", onOrient, true);
+    window.addEventListener("devicemotion",onMotion,true);
+    window.addEventListener("deviceorientation",onOrient,true);
   }
 
-  // ---- 平台 ----
+  // 平台
   function makePlatform(y){
-    var w = (5 + Math.floor(Math.random()*5)) * charW;   // 5~9 字寬
-    var minX = wallW + charW, maxX = W - wallW - w - charW;
-    var x = minX + Math.random()*(maxX-minX);
-    var spike = spawnN>3 && Math.random()<0.22;
-    var letter = TURN[spawnN % 4];
-    spawnN++;
-    return {id:pid++, x:x, y:y, w:w, spike:spike, letter:letter};
+    var w=(5+Math.floor(Math.random()*5))*charW;
+    var minX=wallW+charW, maxX=W-wallW-w-charW;
+    var x=minX+Math.random()*Math.max(1,(maxX-minX));
+    var spike=spawnN>2 && Math.random()<0.22;
+    var letter=TURN[spawnN%4]; spawnN++;
+    return {id:pid++,x:x,y:y,w:w,spike:spike,letter:letter};
   }
   function resetPlatforms(){
-    platforms=[]; pid=0; spawnN=0; lastLanded=-1;
-    var y = ceilingY + cellH*3;
-    while(y < H + cellH){ platforms.push(makePlatform(y)); y += GAP; }
+    platforms=[];pid=0;spawnN=0;lastLanded=-1;
+    var y=ceilingY+cellH*3;
+    while(y<H+cellH){ platforms.push(makePlatform(y)); y+=GAP; }
   }
 
-  // ---- 開局 ----
-  function initGeom(){
-    wallW = ctx.measureText(WALL).width;
-    ceilingY = cellH*2.2;
-    GAP = cellH*4;
-  }
+  function initGeom(){ ceilingY=cellH*2.4; GAP=cellH*4; }
+
   function startPlay(){
     initGeom();
-    reverse = armed;
-    floor=0; score=0; life=0; scrollSpeed=SCROLL0;
+    flipped=false; dirSign=1;
+    floor=0; score=0; life=MAXLIFE; scrollSpeed=SCROLL0; hurtCd=0; flipCandidate=0;
     resetPlatforms();
-    // 角色放在最上面那塊平台上
-    var top = platforms[0];
-    char.x = top.x + top.w/2 - charW/2;
-    char.y = top.y - cellH;
-    char.vy = 0; char.onGround=true; lastLanded=top.id;
-    cv.classList.toggle("flipped", reverse);
-    state="play"; lastT=performance.now();
-    requestAnimationFrame(loop);
+    var top=platforms[0];
+    char.x=top.x+top.w/2-charW/2; char.y=top.y-fontSize; char.vy=0; char.onGround=true; lastLanded=top.id;
+    state="play"; lastT=performance.now(); requestAnimationFrame(loop);
   }
 
-  // ---- 倒數 ----
   function startCountdown(){
     document.getElementById("titleScreen").classList.add("hidden");
     document.getElementById("countScreen").classList.remove("hidden");
-    enableSensors();
-    setTimeout(captureRef, 300); // 給感測器一點時間，擷取基準
-    armed=false; countLeft=5;
-    document.getElementById("countNum").textContent = countLeft;
-    document.getElementById("countMsg").textContent = "準備下樓…";
+    enableSensors(); refReady=false; countLeft=5;
+    document.getElementById("countNum").textContent=countLeft;
+    clearInterval(detectTimer); detectTimer=setInterval(tryCaptureRef,100);
     clearInterval(countTimer);
-    var detect = setInterval(function(){ if(isFlipped()) armed=true; }, 80);
-    countTimer = setInterval(function(){
+    countTimer=setInterval(function(){
       countLeft--;
-      if(countLeft>0){ document.getElementById("countNum").textContent = countLeft; }
-      if(armed){ document.getElementById("countMsg").textContent = "↑ 偵測到翻轉！"; }
+      if(countLeft>0) document.getElementById("countNum").textContent=countLeft;
       if(countLeft<=0){
-        clearInterval(countTimer); clearInterval(detect);
+        clearInterval(countTimer); clearInterval(detectTimer);
         document.getElementById("countScreen").classList.add("hidden");
         startPlay();
       }
     },1000);
   }
 
-  // ---- 主迴圈 ----
+  // 翻轉切換（即時）
+  function toggleFlip(){
+    flipped=!flipped; dirSign=flipped?-1:1;
+    floor=0; // 重新計層：上樓從 0→69
+    // 把角色移到當前平台的另一側
+    var p=null,best=1e9;
+    for(var i=0;i<platforms.length;i++){
+      var pl=platforms[i];
+      if(char.x+charW>pl.x && char.x<pl.x+pl.w){
+        var d=Math.abs((char.y+fontSize/2)-pl.y); if(d<best){best=d;p=pl;}
+      }
+    }
+    if(p){
+      lastLanded=p.id;
+      if(flipped){ char.y=p.y+fontSize; } else { char.y=p.y-fontSize; }
+      char.vy=0; char.onGround=true;
+    } else { char.vy=0; }
+  }
+
+  function hurt(){
+    if(hurtCd>0) return;
+    life--; hurtCd=0.8;
+    if(life<=0) gameOver();
+  }
+
   function loop(t){
     if(state!=="play") return;
-    var dt = Math.min(0.05,(t-lastT)/1000); lastT=t;
-    update(dt); render();
-    requestAnimationFrame(loop);
+    var dt=Math.min(0.05,(t-lastT)/1000); lastT=t;
+    update(dt); render(); requestAnimationFrame(loop);
   }
 
   function update(dt){
-    // 難度隨層數微增
-    scrollSpeed = SCROLL0 + Math.min(80, floor*0.8);
-    // 平台上移
-    for(var i=0;i<platforms.length;i++){ platforms[i].y -= scrollSpeed*dt; }
-    // 移除跑出上方的、補生成下方的
-    platforms = platforms.filter(function(p){ return p.y > ceilingY - cellH*2; });
-    var lowest = platforms.length ? platforms[platforms.length-1].y : ceilingY;
-    while(lowest < H + cellH){ lowest += GAP; platforms.push(makePlatform(lowest)); }
+    if(hurtCd>0) hurtCd-=dt;
+    // 即時翻轉偵測（去抖 0.3s）
+    var want=sensorFlipped();
+    if(want!==flipped){ flipCandidate+=dt; if(flipCandidate>0.3){ toggleFlip(); flipCandidate=0; } }
+    else flipCandidate=0;
 
-    // 左右移動（反向模式反轉方向）
-    var dir = reverse ? -moveDir : moveDir;
-    char.x += dir*MOVE*dt;
-    if(char.x < wallW) char.x = wallW;
-    if(char.x > W-wallW-charW) char.x = W-wallW-charW;
+    scrollSpeed=SCROLL0+Math.min(80,floor*0.8);
+    var dy=-dirSign*scrollSpeed*dt;               // 平台移動（下樓:上移 / 上樓:下移）
+    for(var i=0;i<platforms.length;i++) platforms[i].y+=dy;
 
-    // 重力
-    var prevFeet = char.y + cellH;
-    char.vy += G*dt; char.y += char.vy*dt;
-    var feet = char.y + cellH;
+    // 移除離場 + 補生成
+    if(dirSign>0){
+      platforms=platforms.filter(function(p){return p.y>ceilingY-cellH*2;});
+      var low=platforms.length?platforms[platforms.length-1].y:ceilingY;
+      while(low<H+cellH){ low+=GAP; platforms.push(makePlatform(low)); }
+    }else{
+      platforms=platforms.filter(function(p){return p.y<H+cellH*2;});
+      var hi=platforms.length?platforms[0].y:H;
+      while(hi>ceilingY-cellH){ hi-=GAP; platforms.unshift(makePlatform(hi)); }
+    }
 
-    // 落地判定
+    // 左右（翻轉時反向）
+    var dir=flipped?-moveDir:moveDir;
+    char.x+=dir*MOVE*dt;
+    if(char.x<wallW) char.x=wallW;
+    if(char.x>W-wallW-charW) char.x=W-wallW-charW;
+
+    // 重力（依方向）
+    var prevY=char.y;
+    char.vy+=G*dirSign*dt; char.y+=char.vy*dt;
+
+    // 落地
     char.onGround=false;
     for(var j=0;j<platforms.length;j++){
       var p=platforms[j];
-      if(char.vy>=0 && prevFeet<=p.y+6 && feet>=p.y &&
-         char.x+charW>p.x && char.x<p.x+p.w){
-        char.y = p.y - cellH; char.vy=0; char.onGround=true;
-        // 踩到新平台
-        if(p.id!==lastLanded){
-          lastLanded=p.id; floor++; score++;
-          if(p.spike) life--;   // 尖刺平台扣血
-          if(reverse && floor>=69){ doWin(); return; }
+      var hitX=char.x+charW>p.x && char.x<p.x+p.w;
+      if(!hitX) continue;
+      if(dirSign>0){ // 下樓：踩平台上緣
+        if(char.vy>=0 && (prevY+fontSize)<=p.y+6 && (char.y+fontSize)>=p.y){
+          char.y=p.y-fontSize; char.vy=0; char.onGround=true; land(p); break;
         }
-        break;
+      }else{ // 上樓：貼平台下緣
+        var pb=p.y+fontSize;
+        if(char.vy<=0 && prevY>=pb-6 && char.y<=pb){
+          char.y=pb; char.vy=0; char.onGround=true; land(p); break;
+        }
       }
     }
-    // 站著就跟著平台上移一點（手感更穩）
-    if(char.onGround){ char.y -= scrollSpeed*dt; }
+    if(char.onGround) char.y+=dy; // 跟著平台走
 
-    // 撞天花板尖刺
-    if(char.y < ceilingY){ char.y = ceilingY; char.vy = 120; life--; }
-    // 掉出底部 → 扣血、回到最上面平台
-    if(char.y > H){
-      life--;
-      var top = platforms[0];
-      char.x = top.x+top.w/2-charW/2; char.y=top.y-cellH; char.vy=0; lastLanded=top.id;
+    // 邊界 / 尖刺天花板
+    if(dirSign>0){
+      if(char.y<ceilingY){ char.y=ceilingY; char.vy=120; hurt(); }
+      if(char.y>H){ respawn(); }
+    }else{
+      if(char.y+fontSize>H-ceilingY*0.3){ char.y=H-ceilingY*0.3-fontSize; char.vy=-120; hurt(); }
+      if(char.y<-fontSize){ respawn(); }
     }
   }
 
-  // ---- 繪製 ----
-  function txt(s,x,y,color){ ctx.fillStyle=color; ctx.fillText(s,x,y); }
-  function render(){
-    ctx.clearRect(0,0,W,H);
-    ctx.font = fontSize+"px monospace"; ctx.textBaseline="top";
+  function land(p){
+    if(p.id!==lastLanded){
+      lastLanded=p.id; floor++; score++;
+      if(p.spike) hurt();
+      if(flipped && floor>=69) doWin();
+    }
+  }
+  function respawn(){
+    hurt();
+    if(state!=="play") return;
+    var p=dirSign>0?platforms[0]:platforms[platforms.length-1];
+    char.x=p.x+p.w/2-charW/2;
+    char.y=dirSign>0?(p.y-fontSize):(p.y+fontSize);
+    char.vy=0; lastLanded=p.id;
+  }
 
+  // 繪製
+  function txt(s,x,y,c){ctx.fillStyle=c; ctx.fillText(s,x,y);}
+  function render(){
+    ctx.clearRect(0,0,W,H); ctx.font=fontSize+"px monospace"; ctx.textBaseline="top"; ctx.textAlign="left";
     // 天花板尖刺（朝下 v）
     var vline=""; for(var c=0;c<cols;c++) vline+="v";
-    txt(vline, 0, ceilingY-cellH, "#FFFFFF");
-
-    // 左右牆
-    for(var y=ceilingY; y<H; y+=cellH){
-      txt(WALL, 0, y, "#3B6EF5");
-      txt(WALL, W-wallW, y, "#3B6EF5");
-    }
-
-    // 平台（TURN 字母）+ 平台尖刺（朝上 ^）
+    txt(vline,0,ceilingY-cellH,"#FFFFFF");
+    // 牆
+    for(var y=ceilingY;y<H;y+=cellH){ txt("[#]",0,y,"#3B6EF5"); txt("[#]",W-wallW,y,"#3B6EF5"); }
+    // 平台 + 尖刺（緊貼平台上緣）
     for(var i=0;i<platforms.length;i++){
-      var p=platforms[i];
-      var n=Math.max(1,Math.round(p.w/charW));
+      var p=platforms[i], n=Math.max(1,Math.round(p.w/charW));
+      if(p.spike){ var sp=""; for(var s=0;s<n;s++) sp+="^"; txt(sp,p.x+charW,p.y-fontSize,"#FFFFFF"); }
       var body="["; for(var k=0;k<n;k++) body+=p.letter; body+="]";
-      if(p.spike){
-        var sp=""; for(var s=0;s<n;s++) sp+="^";
-        txt(sp, p.x, p.y-cellH, "#FFFFFF");
-      }
-      txt(body, p.x, p.y, "#FFFFFF");
+      txt(body,p.x,p.y,"#FFFFFF");
     }
-
-    // 角色
-    txt("웃", char.x, char.y, "#FFD400");
-
-    // HUD
-    ctx.font = Math.round(fontSize*0.9)+"px monospace";
-    var fl = reverse ? (floor+"F") : ("B"+floor);
-    txt("life :"+life, wallW+4, 6, "#4FC3F7");
-    txt("score:"+score, wallW+4, 6+cellH, "#4FC3F7");
-    txt(fl, W-wallW-charW*5, 6, "#4FC3F7");
-    ctx.font = fontSize+"px monospace";
+    // 角色（翻轉時上下顛倒繪製）
+    ctx.save();
+    ctx.translate(char.x+charW/2,char.y+fontSize/2);
+    if(flipped) ctx.rotate(Math.PI);
+    ctx.fillStyle="#FFD400"; ctx.textAlign="center"; ctx.textBaseline="middle";
+    ctx.fillText("웃",0,0); ctx.restore();
+    ctx.textAlign="left"; ctx.textBaseline="top";
+    // HUD：五滴血
+    ctx.font=Math.round(fontSize*0.95)+"px monospace";
+    var bx=wallW+4;
+    for(var b=0;b<MAXLIFE;b++){ txt("血",bx,6,b<life?"#FF4D4D":"#FFFFFF"); bx+=bloodW; }
+    var fl=flipped?(floor+"F"):("B"+floor);
+    txt(fl,W-wallW-charW*5,6,"#4FC3F7");
+    txt("score:"+score,wallW+4,6+cellH,"#4FC3F7");
+    ctx.font=fontSize+"px monospace";
   }
 
-  // ---- 通關 ----
   function doWin(){
     state="win";
-    var ws=document.getElementById("winScreen");
-    document.getElementById("winBody").innerHTML =
-      "你發現了：往下不是唯一的方向。<br>有些 bug，是通往出口的門。";
-    ws.classList.remove("hidden");
+    document.getElementById("winBody").innerHTML="你發現了：往下不是唯一的方向。<br>有些 bug，是通往出口的門。";
+    document.getElementById("winScreen").classList.remove("hidden");
+  }
+  function gameOver(){
+    state="over";
+    document.getElementById("overBody").innerHTML=(flipped?("爬到 "+floor+"F"):("下降到 B"+floor))+"<br>五滴血用完了。";
+    document.getElementById("overScreen").classList.remove("hidden");
   }
 
-  // ---- 輸入 ----
-  function setDirFromX(clientX){ moveDir = (clientX < window.innerWidth/2) ? -1 : 1; }
-  function press(e){ if(state!=="play")return; var x=(e.touches?e.touches[0].clientX:e.clientX); setDirFromX(x); }
+  // 輸入
+  function press(e){ if(state!=="play")return; var x=(e.touches?e.touches[0].clientX:e.clientX); moveDir=(x<window.innerWidth/2)?-1:1; }
   function release(){ moveDir=0; }
-  cv.addEventListener("touchstart", press, {passive:true});
-  cv.addEventListener("touchmove", press, {passive:true});
-  cv.addEventListener("touchend", release);
-  cv.addEventListener("mousedown", press);
-  cv.addEventListener("mouseup", release);
-  document.addEventListener("keydown", function(e){
-    if(e.key==="ArrowLeft") moveDir=-1;
-    else if(e.key==="ArrowRight") moveDir=1;
-    else if((e.key==="f"||e.key==="F") && state==="count") armed=true; // 桌機模擬翻轉
+  cv.addEventListener("touchstart",press,{passive:true});
+  cv.addEventListener("touchmove",press,{passive:true});
+  cv.addEventListener("touchend",release);
+  cv.addEventListener("mousedown",press);
+  cv.addEventListener("mouseup",release);
+  document.addEventListener("keydown",function(e){
+    if(e.key==="ArrowLeft")moveDir=-1;
+    else if(e.key==="ArrowRight")moveDir=1;
+    else if((e.key==="f"||e.key==="F")&&state==="play") toggleFlip(); // 桌機模擬翻轉
   });
-  document.addEventListener("keyup", function(e){
-    if(e.key==="ArrowLeft"||e.key==="ArrowRight") moveDir=0;
-  });
+  document.addEventListener("keyup",function(e){ if(e.key==="ArrowLeft"||e.key==="ArrowRight")moveDir=0; });
 
-  // ---- 按鈕 ----
-  document.getElementById("startBtn").addEventListener("click", startCountdown);
-  document.getElementById("againBtn").addEventListener("click", function(){
-    document.getElementById("winScreen").classList.add("hidden");
-    document.getElementById("titleScreen").classList.remove("hidden");
-    cv.classList.remove("flipped");
-    state="title";
-  });
+  function backToTitle(){ document.getElementById("titleScreen").classList.remove("hidden"); state="title"; }
+  document.getElementById("startBtn").addEventListener("click",startCountdown);
+  document.getElementById("againBtn").addEventListener("click",function(){ document.getElementById("winScreen").classList.add("hidden"); backToTitle(); });
+  document.getElementById("retryBtn").addEventListener("click",function(){ document.getElementById("overScreen").classList.add("hidden"); backToTitle(); });
 })();
 </script>
 </body>
