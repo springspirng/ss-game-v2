@@ -1,50 +1,40 @@
-# M0 · 翻轉偵測探針
+# 01-game-demo — Life need some BUG（可玩版）
 
-> Life need some BUG 專案的技術探針。**不是遊戲**，只驗證一件事：
-> 「相對翻轉偵測」在真機上，正拿 / 反拿當基準都準不準。
+推上 GitHub Pages 用手機玩的遊戲本體。
 
-## 這頁在測什麼
+## 檔案
 
-1. **iOS 感測器授權流程**：點 ▼ START 觸發 `requestPermission()`。
-2. **即時感測器讀值**：orientation(β/γ/α)、gravity(x/y/z)、screen.orientation。
-3. **相對翻轉判定（核心）**：先校準基準 `gRef`，再算「目前重力向量與基準的夾角」，接近 180° 判定為翻轉。
-4. **5 秒倒數模擬**：重現遊戲的啟動窗口——倒數開始擷取基準，窗口內翻轉 → 顯示「啟動成功」。
-5. **門檻 / 去抖可調**：現場拉 slider 找出最佳參數。
-6. **桌機備援**：按空白鍵或「模擬翻轉」按鈕，無感測器也能測流程。
+| 檔案 | 說明 |
+|------|------|
+| `index.html` | **遊戲本體**（Pages 首頁）。下樓玩法 + 翻轉通關。 |
+| `spike.html` | M0 翻轉偵測診斷探針（備查用，數值/門檻校準）。 |
 
-## 怎麼測（手機）
+## 怎麼玩
 
-1. 開啟 GitHub Pages 網址（見下）。
-2. 點 **▼ START**，允許感測器。
-3. **正拿手機**點「校準並開始 5 秒倒數」→ 倒數內把手機上下翻過來 → 應顯示 `FLIP 已偵測 ✓` 與「啟動成功」。
-4. **反拿手機**（一開始就倒著拿）重複步驟 3 → 一樣要能偵測到翻轉。這是本探針最關鍵的驗證點。
-5. 把下方「紀錄」用「複製紀錄」貼回來，就能一起校準門檻與去抖時間。
+1. 手機開 Pages 網址（見下），點 **▼ START**，允許感測器。
+2. 進入 **5 秒倒數**——此時把手機**上下翻轉過來**，就會啟動隱藏的通關模式。
+3. 倒數結束開始下樓：**點螢幕左 / 右半邊**控制左右移動，踩穩每一階平台。
+   - 平台由 `t/u/r/n` 字母排成 → 拼出 **TURN**（提示你「轉」）。
+   - 尖刺（天花板 `v` / 平台 `^`）會扣 life。
+4. 若倒數時**沒翻轉** → 無盡下樓，樓層 `B1、B2…` 一直往下，永遠玩不完。
+5. 若倒數時**翻轉了** → 畫面倒轉成上樓，樓層 `1F→…→69F`，**爬到 69F 通關**。
 
-## 部署到 GitHub Pages
+> 桌機測試：方向鍵移動；倒數時按 `F` 模擬翻轉。
 
-把 `index.html` 放進 repo 根目錄後：
+## 翻轉判定（已依真機實測調校）
+
+實測手拿翻轉夾角最多約 140°（達不到 180°），所以採**雙保險**：
+主判定看「裝置 Y 軸重力符號相對基準是否反轉」（近乎二元、最可靠），
+備援看「與基準夾角 > 120°」。詳見 `../Life need some BUG/02_技術可行性文件.md` §8。
+
+## 部署 / 更新（GitHub Pages）
+
+repo 已 `git init`。每次改完：
 
 ```bash
-# 在你 clone 好的 s-g-demo1 資料夾裡
-git add index.html README.md
-git commit -m "add M0 flip-detection spike"
-git push origin main
+cd "/Users/spring/Documents/MDCG/Co_AI/26/01_swag_新竹工程師/preproduction/game-demo/01-game-demo"
+git add -A && git commit -m "update game" && git push
 ```
 
-然後到 GitHub repo → **Settings → Pages** →
-Source 選 `Deploy from a branch` → Branch 選 `main` / `/ (root)` → Save。
-
-約一分鐘後網址會是：
-
-```
-https://springspirng.github.io/s-g-demo1/
-```
-
-> ⚠️ 感測器 API 一定要 HTTPS，`github.io` 天生是 HTTPS，所以手機開這個網址就能測。
-> 本機直接開 `index.html`（file://）**收不到 iOS 感測器**，請務必用 Pages 網址或 `localhost`。
-
-## 判讀重點
-
-- 正拿、反拿兩種基準，翻轉時夾角都應衝到 ~180° 並穩定觸發。
-- 若某機種 `devicemotion` 沒有重力值，頁面會自動改用 orientation 推導（事件狀態列會標示），比較兩者穩定度。
-- 記下每支機的：能不能觸發、延遲感、最佳門檻/去抖 → 回填到 `../Life need some BUG/02_技術可行性文件.md` 的實驗清單。
+首頁：`https://springspirng.github.io/s-g-demo1/`
+（repo 需為 public 才能開免費 Pages；Settings → Pages → Source 選 main / root。）
