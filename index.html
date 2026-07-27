@@ -369,7 +369,7 @@
       '</div>'+
       '<div class="formNote">＊採超商店到店的方式兌換（示意畫面，尚未串接送出）</div>';
     var ws=document.getElementById("winScreen");
-    ws.classList.toggle("flip180",upsideDown);   // 手機顛倒時文字也轉正
+    ws.classList.remove("flip180");   // 破關訊息一律用正常方向顯示，輸入框/下拉選單才能正常操作
     ws.classList.remove("hidden"); }
   function gameOver(){ state="over";
     document.getElementById("overBody").innerHTML=(climbing?("爬到 "+floor+"F"):("下降到 B"+floor))+"<br>五滴血用完了。";
