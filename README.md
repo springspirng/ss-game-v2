@@ -1,3 +1,6 @@
+---
+modified: 2026-07-27T15:54:46+08:00
+---
 # 01-game-demo — Life need some BUG（可玩版）
 
 推上 GitHub Pages 用手機玩的遊戲本體。

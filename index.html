@@ -14,7 +14,7 @@
   #game{display:block;background:var(--bg);transition:transform .4s ease;}
   #game.flip180{transform:rotate(180deg);}
   .overlay{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
-    color:#C8C8C8;text-align:center;padding:24px;z-index:10;}
+    color:#C8C8C8;text-align:center;padding:24px;z-index:10;overflow-y:auto;}
   .overlay.hidden{display:none;}
   .overlay.flip180{transform:rotate(180deg);}
   h1{color:var(--char);font-size:26px;letter-spacing:2px;margin-bottom:6px;}
@@ -29,6 +29,17 @@
   .big{font-size:30px;letter-spacing:2px;}
   #winTitle{color:var(--char);} #overTitle{color:var(--blood);}
   .body{color:#C8C8C8;font-size:15px;margin-top:18px;line-height:1.8;max-width:300px;}
+  .subtag{color:#555;font-size:12px;letter-spacing:1px;margin-top:-6px;}
+  .quote{color:#999;font-size:13px;font-style:italic;margin:12px auto;line-height:1.8;max-width:290px;}
+  .giftBox{width:100%;max-width:240px;aspect-ratio:4/3;margin:14px auto;border:1px dashed #555;
+    border-radius:10px;display:flex;align-items:center;justify-content:center;color:#555;font-size:13px;}
+  .cta{color:var(--char);font-size:16px;letter-spacing:1px;margin-top:6px;}
+  .redeemForm{width:100%;max-width:280px;margin:16px auto 0;display:flex;flex-direction:column;gap:12px;text-align:left;}
+  .redeemForm label{display:block;color:#888;font-size:12px;letter-spacing:1px;margin-bottom:4px;}
+  .redeemForm select,.redeemForm input{width:100%;font-family:inherit;font-size:14px;
+    background:#111;color:#C8C8C8;border:1px solid #444;border-radius:6px;padding:10px 12px;}
+  .redeemForm select:focus,.redeemForm input:focus{outline:none;border-color:var(--char);}
+  .formNote{color:#555;font-size:11px;line-height:1.7;margin-top:12px;max-width:290px;}
 </style>
 </head>
 <body>
@@ -307,7 +318,21 @@
   }
 
   function doWin(){ state="win";
-    document.getElementById("winBody").innerHTML="你發現了：往下不是唯一的方向。<br>有些 bug，是通往出口的門。";
+    document.getElementById("winTitle").innerHTML="恭喜你找到 BUG 囉！<div class=\"subtag\">69F · 出口</div>";
+    document.getElementById("winBody").innerHTML=
+      '<div class="tag" style="margin-bottom:0;">給一成不變的生活來點 BUG 吧！</div>'+
+      '<div class="quote">「適度的打破一些生活規則，透過不一樣的體驗，讓你的生活變得更有新鮮感」</div>'+
+      '<div class="giftBox">＊贈品示意圖</div>'+
+      '<div class="cta">即刻領取解鎖生活 BUG 包</div>'+
+      '<div class="redeemForm">'+
+        '<div><label>選擇最近的超商</label>'+
+          '<select id="storeSelect"><option value="">請選擇超商</option>'+
+          '<option>7-ELEVEN</option><option>全家 FamilyMart</option>'+
+          '<option>萊爾富 Hi-Life</option><option>OK超商</option></select></div>'+
+        '<div><label>電話</label><input type="tel" placeholder="請輸入手機號碼" id="phoneInput"></div>'+
+        '<div><label>領取人</label><input type="text" placeholder="請輸入領取人姓名" id="nameInput"></div>'+
+      '</div>'+
+      '<div class="formNote">＊採超商店到店的方式兌換（示意畫面，尚未串接送出）</div>';
     var ws=document.getElementById("winScreen");
     ws.classList.toggle("flip180",upsideDown);   // 手機顛倒時文字也轉正
     ws.classList.remove("hidden"); }
