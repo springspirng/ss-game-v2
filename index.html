@@ -102,6 +102,7 @@
   var manual=false, manualOn=false; // 桌機用 F 模擬翻轉
   var platforms=[], pid=0, spawnN=0, lastLanded=-1, lastSpike=false;
   var floor=0, score=0, life=MAXLIFE, scrollSpeed=SCROLL0;
+  var climbReach=0, climbSinceSpike=99, climbBalance=0; // 上樓模式：可達距離 + 尖刺/補包配額
   var moveDir=0;
   var char={x:0,y:0,vy:0,onGround:false};
   var lastT=0, countLeft=5, countTimer=null, detectTimer=null;
@@ -158,13 +159,46 @@
     var low=platforms.length?platforms[platforms.length-1].y:ceilingY;
     while(low<H+cellH){ low+=GAP; platforms.push(makePlatform(low)); }
   }
+  // 上樓（通關）用的平台：x 位置一定被限制在「跳得到」的範圍內，
+  // 尖刺機率降低、補包機率提高，並用 climbBalance 強制補血，確保不會必死。
+  function makeClimbPlatform(y, ref){
+    var w=(5+Math.floor(Math.random()*5))*charW;
+    var minX=wallW+charW, maxX=W-wallW-w-charW;
+    var x;
+    if(ref){
+      var targetCenter=ref.x+ref.w/2-w/2;
+      var lo=Math.max(minX, targetCenter-climbReach), hi=Math.min(maxX, targetCenter+climbReach);
+      x = (hi<=lo) ? Math.min(maxX,Math.max(minX,targetCenter)) : lo+Math.random()*(hi-lo);
+    } else {
+      x=minX+Math.random()*Math.max(1,(maxX-minX));
+    }
+    climbSinceSpike++;
+    var type="normal";
+    if(climbBalance>=2){ type="heal"; }                                   // 補血配額：尖刺欠太多，強制回血
+    else if(climbSinceSpike>3 && spawnN>2 && Math.random()<0.10){ type="spike"; } // 尖刺：間隔至少 3 階才可能再出現
+    else if(Math.random()<0.22){ type="heal"; }
+    if(type==="spike"){ climbSinceSpike=0; climbBalance++; }
+    else if(type==="heal"){ climbBalance--; }
+    var letter=TURN[spawnN%4]; spawnN++;
+    return {id:pid++,x:x,y:y,w:w,type:type,used:false,letter:letter};
+  }
   function manageUp(){
     platforms=platforms.filter(function(p){return p.y<H+cellH*2;});
     var hi=platforms.length?platforms[0].y:H;
-    while(hi>ceilingY-cellH){ hi-=GAP; platforms.unshift(makePlatform(hi)); }
+    while(hi>ceilingY-cellH){
+      hi-=GAP;
+      var ref=platforms.length?platforms[0]:null;
+      platforms.unshift(makeClimbPlatform(hi, ref));
+    }
   }
 
-  function initGeom(){ ceilingY=cellH*2.4; GAP=cellH*3.4; }
+  function initGeom(){
+    ceilingY=cellH*2.4; GAP=cellH*3.4;
+    // 上樓每次自動彈跳的最大可達水平距離（含安全係數），用來限制下一階的位置
+    var disc=Math.max(0, JUMP*JUMP-2*G*GAP);
+    var flightT=(JUMP+Math.sqrt(disc))/G;
+    climbReach=MOVE*flightT*0.7;
+  }
 
   function startPlay(){
     initGeom();
@@ -198,6 +232,7 @@
   // 切換模式（下樓 <-> 上樓），角色都站在平台上緣（邏輯座標一致）
   function toggleMode(){
     climbing=!climbing; floor=0; lastLanded=-1;
+    if(climbing){ climbSinceSpike=99; climbBalance=0; }
     var p=null,best=1e9;
     for(var i=0;i<platforms.length;i++){
       var pl=platforms[i];
