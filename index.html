@@ -418,7 +418,7 @@
 
   // 下樓：邏輯座標 下=+y。往下掉、踩平台上緣、平台向上捲
   function updateDown(dt){
-    scrollSpeed=SCROLL0+Math.min(80,floor*0.8);
+    scrollSpeed=SCROLL0+Math.min(160,Math.floor(floor/20)*16); // 每往下 20 層階梯式加速一點（上限 +160）
     var dy=-scrollSpeed*dt;
     for(var i=0;i<platforms.length;i++) platforms[i].y+=dy;
     manageDown();
