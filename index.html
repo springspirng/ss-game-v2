@@ -267,16 +267,17 @@
     "+===[|]=====[|]===+"
   ];
   var introT=0, introPhase="hold", panT=0, panDist=0;
+  var introStairs=[], introFloorY=0, introCenterY=0;
   var gas=[], gasAcc=0;
   var mFont=0, mLineH=0, mLineW=0, mX=0, mTopY0=0, mH=0;
-  var HOLD_T=1.4, PAN_T=2.0;
+  var HOLD_T=3.4, PAN_T=2.2;   // 機台停留 3.4s + 上帶 2.2s（可見約 4~5s）
   function lerpCol(a,b,t){return "rgb("+((a[0]+(b[0]-a[0])*t)|0)+","+((a[1]+(b[1]-a[1])*t)|0)+","+((a[2]+(b[2]-a[2])*t)|0)+")";}
   function setupMachine(){
     mFont=fontSize; ctx.font=mFont+"px monospace";
     var lw=ctx.measureText(MACHINE[0]).width, avail=W-2*wallW-16;
     if(lw>avail){ mFont=Math.max(9,Math.floor(mFont*avail/lw)); ctx.font=mFont+"px monospace"; lw=ctx.measureText(MACHINE[0]).width; }
     mLineW=lw; mLineH=Math.round(mFont*1.25); mH=MACHINE.length*mLineH;
-    mX=(W-mLineW)/2; mTopY0=H-Math.round(H*0.10)-mH;      // 機台停在畫面底部
+    mX=(W-mLineW)/2;
   }
   function spawnGas(baseX,width,topY){
     var vents=[0.22,0.5,0.78];
@@ -289,7 +290,17 @@
     enableSensors(); refReady=false;
     clearInterval(detectTimer); detectTimer=setInterval(tryCaptureRef,100);
     initGeom(); setupMachine();
-    introT=0; introPhase="hold"; panT=0; panDist=H; gas=[]; gasAcc=0;
+    introCenterY=(H-mH)/2; mTopY0=introCenterY;          // 機台置中
+    introFloorY=introCenterY+mH;                          // 機台底下的地板
+    panDist=introFloorY+cellH*2;                          // 上帶到機台完全滑出畫面
+    introStairs=[];                                       // 機台上方的樓梯
+    var stepW=6*charW, sMinX=wallW+charW, sMaxX=W-wallW-stepW-charW;
+    var kmax=Math.ceil((panDist+H)/GAP)+2;
+    for(var k=1;k<=kmax;k++){
+      var sx=(k%2===0)? sMinX+(sMaxX-sMinX)*0.12 : sMinX+(sMaxX-sMinX)*0.68;
+      introStairs.push({x:sx,y:introCenterY-k*GAP,w:stepW,letter:TURN[k%4]});
+    }
+    introT=0; introPhase="hold"; panT=0; gas=[]; gasAcc=0;
     cv.className=""; state="intro"; lastT=performance.now(); requestAnimationFrame(introLoop);
   }
   function updateIntro(dt){
@@ -306,7 +317,16 @@
     ctx.clearRect(0,0,W,H); ctx.textBaseline="top"; ctx.textAlign="left";
     ctx.font=fontSize+"px monospace";
     for(var y=0;y<H;y+=cellH){ txt("[#]",0,y,"#3B6EF5"); txt("[#]",W-wallW,y,"#3B6EF5"); }
-    var panOff=(introPhase==="pan")?introEase(Math.min(1,panT/PAN_T))*panDist:0, topY=mTopY0+panOff;
+    var panOff=(introPhase==="pan")?introEase(Math.min(1,panT/PAN_T))*panDist:0;
+    for(var s=0;s<introStairs.length;s++){        // 機台上方的樓梯
+      var st=introStairs[s], sy=st.y+panOff;
+      if(sy<-cellH||sy>H) continue;
+      var sn=Math.max(1,Math.round(st.w/charW));
+      txt("["+rep(st.letter,sn)+"]", st.x, sy, "#FFFFFF");
+    }
+    var fy=introFloorY+panOff;                     // 機台底下的地板
+    if(fy>-cellH&&fy<H){ var fn=Math.max(1,Math.floor((W-2*wallW)/charW)); txt(rep("=",fn), wallW, fy, "#5A6B8C"); }
+    var topY=mTopY0+panOff;
     ctx.font=mFont+"px monospace";
     for(var i=0;i<MACHINE.length;i++){
       var heat=0.5+0.5*Math.sin(introT*6+i*0.8);
