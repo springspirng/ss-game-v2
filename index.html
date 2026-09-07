@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Life need some BUG</title>
+<title>MISSION: PRESSURE RELEASE｜機房解壓任務</title>
 <style>
   :root{ --bg:#000; --wall:#3B6EF5; --plat:#FFFFFF; --char:#FFD400; --hud:#4FC3F7; --blood:#FF4D4D; }
   *{margin:0;padding:0;box-sizing:border-box;}
@@ -41,15 +41,38 @@
     background:#111;color:#C8C8C8;border:1px solid #444;border-radius:6px;padding:10px 12px;}
   .redeemForm select:focus,.redeemForm input:focus{outline:none;border-color:var(--char);}
   .formNote{color:#555;font-size:11px;line-height:1.7;margin-top:12px;max-width:290px;}
+  .brief{width:100%;max-width:320px;text-align:left;margin:0 auto 16px;}
+  .briefLabel{color:var(--hud);font-size:12px;letter-spacing:1px;margin-bottom:6px;
+    border-left:2px solid var(--wall);padding-left:8px;}
+  .briefText{color:#C8C8C8;font-size:14px;line-height:1.7;padding-left:10px;}
+  .objList{display:flex;flex-direction:column;gap:6px;}
+  .objList b{color:var(--char);font-weight:normal;margin-right:6px;}
+  .missionBtn{font-size:15px;padding:13px 22px;margin-top:8px;line-height:1.5;max-width:320px;}
+  .ctaBtn{display:block;width:100%;max-width:300px;margin:10px auto 0;font-family:inherit;
+    font-size:13px;text-align:left;background:transparent;color:var(--char);
+    border:1px solid var(--char);border-radius:6px;padding:12px 14px;cursor:pointer;
+    letter-spacing:1px;line-height:1.6;}
+  .ctaBtn:active{background:var(--char);color:#000;}
 </style>
 </head>
 <body>
   <div id="wrap"><canvas id="game"></canvas></div>
 
   <div id="titleScreen" class="overlay">
-    <h1>Life need some BUG</h1>
-    <div class="tag">一個永遠下不完的樓梯</div>
-    <button id="startBtn">▼ START</button>
+    <h1 style="font-size:20px;">MISSION: PRESSURE RELEASE</h1>
+    <div class="tag">機房解壓任務</div>
+    <div class="brief">
+      <div class="briefLabel">INITIAL DIAGNOSIS / 初步判讀</div>
+      <div class="briefText">機房算力不足，壓力負荷持續上升</div>
+    </div>
+    <div class="brief">
+      <div class="briefLabel">OBJECTIVE / 任務目標</div>
+      <div class="briefText objList">
+        <span><b>01</b>找到通往過載機房的正確路徑</span>
+        <span><b>02</b>抵達機房後，植入解壓晶片，完成機房解壓任務</span>
+      </div>
+    </div>
+    <button id="startBtn" class="missionBtn">&gt; START MISSION / 啟動解壓任務</button>
     <div class="hint">左右半邊點按＝移動<br>小心尖刺，五滴血用完就結束<br>試著找出「出口」…</div>
   </div>
 
@@ -60,13 +83,13 @@
   </div>
 
   <div id="winScreen" class="overlay hidden">
-    <div id="winTitle" class="big">69F · 出口</div>
+    <div id="winTitle" class="big">MISSION COMPLETE</div>
     <div id="winBody" class="body"></div>
     <button id="againBtn" style="margin-top:26px;">再玩一次</button>
   </div>
 
   <div id="overScreen" class="overlay hidden">
-    <div id="overTitle" class="big">GAME OVER</div>
+    <div id="overTitle" class="big">MISSION FAILED<div class="subtag">解壓任務中止</div></div>
     <div id="overBody" class="body"></div>
     <button id="retryBtn" style="margin-top:26px;">再玩一次</button>
   </div>
@@ -108,6 +131,7 @@
   var char={x:0,y:0,vy:0,onGround:false};
   var lastT=0, countLeft=5, countTimer=null, detectTimer=null;
   var hurtCd=0, flipCandidate=0;
+  var WIN_FLOOR=69, machineSpawned=false, machinePlat=null, animT=0, playGasAcc=0; // 69F 機台收尾
 
   // 感測器
   var gNow={x:0,y:0,z:0}, refReady=false, haveSensor=false;
@@ -183,8 +207,28 @@
     var letter=TURN[spawnN%4]; spawnN++;
     return {id:pid++,x:x,y:y,w:w,type:type,used:false,letter:letter};
   }
+  // 69F 收尾機台：與開場同一台。單行碰撞在 p.y，機台圖形往下延伸，角色站在頂端。
+  function makeMachinePlatform(y, ref){
+    if(!mLineW) setupMachine();
+    var w=mLineW, minX=wallW+charW, maxX=W-wallW-w-charW;
+    var x;
+    if(ref){
+      var tc=ref.x+ref.w/2-w/2, lo=Math.max(minX,tc-climbReach), hi=Math.min(maxX,tc+climbReach);
+      x=(hi<=lo)?Math.min(maxX,Math.max(minX,tc)):lo+Math.random()*(hi-lo);
+    } else { x=Math.max(minX,(W-w)/2); }
+    spawnN++;
+    return {id:pid++,x:x,y:y,w:w,type:"machine",used:false,letter:"M"};
+  }
+  function spawnMachineAbove(base){
+    machineSpawned=true;
+    var y=base.y-GAP;
+    var mp=makeMachinePlatform(y, base);
+    platforms=platforms.filter(function(p){return p.y>=y;}); // 機台以上不留其他平台，成為唯一頂點
+    platforms.unshift(mp); machinePlat=mp;
+  }
   function manageUp(){
     platforms=platforms.filter(function(p){return p.y<H+cellH*2;});
+    if(machineSpawned) return;                 // 機台已現身，不再往上生成
     var hi=platforms.length?platforms[0].y:H;
     while(hi>ceilingY-cellH){
       hi-=GAP;
@@ -206,25 +250,94 @@
     climbing=false; upsideDown=baseUp;
     cv.className = upsideDown?"flip180":"";
     floor=0; score=0; life=MAXLIFE; scrollSpeed=SCROLL0; hurtCd=0; flipCandidate=0;
+    machineSpawned=false; machinePlat=null; gas=[]; playGasAcc=0;
     resetPlatforms();
     var top=platforms[0];
     char.x=top.x+top.w/2-charW/2; char.y=top.y-fontSize; char.vy=0; char.onGround=true; lastLanded=top.id;
     state="play"; lastT=performance.now(); requestAnimationFrame(loop);
   }
 
-  function startCountdown(){
+  // ===== 開場動畫：過熱機台 + 噴氣，鏡頭往上帶到起點，再倒數 3 秒 =====
+  var MACHINE=[
+    "+=================+",
+    "|  ! OVERLOAD !   |",
+    "| [##] [##] [##]  |",
+    "| [##] [##] [##]  |",
+    "|  ===========    |",
+    "+===[|]=====[|]===+"
+  ];
+  var introT=0, introPhase="hold", panT=0, panDist=0;
+  var gas=[], gasAcc=0;
+  var mFont=0, mLineH=0, mLineW=0, mX=0, mTopY0=0, mH=0;
+  var HOLD_T=1.4, PAN_T=2.0;
+  function lerpCol(a,b,t){return "rgb("+((a[0]+(b[0]-a[0])*t)|0)+","+((a[1]+(b[1]-a[1])*t)|0)+","+((a[2]+(b[2]-a[2])*t)|0)+")";}
+  function setupMachine(){
+    mFont=fontSize; ctx.font=mFont+"px monospace";
+    var lw=ctx.measureText(MACHINE[0]).width, avail=W-2*wallW-16;
+    if(lw>avail){ mFont=Math.max(9,Math.floor(mFont*avail/lw)); ctx.font=mFont+"px monospace"; lw=ctx.measureText(MACHINE[0]).width; }
+    mLineW=lw; mLineH=Math.round(mFont*1.25); mH=MACHINE.length*mLineH;
+    mX=(W-mLineW)/2; mTopY0=H-Math.round(H*0.10)-mH;      // 機台停在畫面底部
+  }
+  function spawnGas(baseX,width,topY){
+    var vents=[0.22,0.5,0.78];
+    var vx=baseX+vents[(Math.random()*vents.length)|0]*width+(Math.random()-0.5)*charW*2;
+    gas.push({x:vx,y:topY-4,vy:26+Math.random()*34,vx:(Math.random()-0.5)*24,age:0,life:1.1+Math.random()*1.1});
+  }
+  function introEase(p){ return p<0.5 ? 2*p*p : 1-Math.pow(-2*p+2,2)/2; }
+  function startIntro(){
     document.getElementById("titleScreen").classList.add("hidden");
-    document.getElementById("countScreen").classList.remove("hidden");
-    enableSensors(); refReady=false; countLeft=5;
-    document.getElementById("countNum").textContent=countLeft;
+    enableSensors(); refReady=false;
     clearInterval(detectTimer); detectTimer=setInterval(tryCaptureRef,100);
+    initGeom(); setupMachine();
+    introT=0; introPhase="hold"; panT=0; panDist=H; gas=[]; gasAcc=0;
+    cv.className=""; state="intro"; lastT=performance.now(); requestAnimationFrame(introLoop);
+  }
+  function updateIntro(dt){
+    introT+=dt;
+    var panOff=(introPhase==="pan")?introEase(Math.min(1,panT/PAN_T))*panDist:0;
+    gasAcc+=dt;
+    while(gasAcc>0.07){ gasAcc-=0.07; spawnGas(mX,mLineW,mTopY0+panOff); }
+    for(var i=gas.length-1;i>=0;i--){ var g=gas[i]; g.age+=dt; g.y-=g.vy*dt; g.x+=g.vx*dt; g.vy*=(1-0.5*dt); if(g.age>=g.life) gas.splice(i,1); }
+    if(introPhase==="hold" && introT>=HOLD_T){ introPhase="pan"; panT=0; }
+    else if(introPhase==="pan"){ panT+=dt; if(panT>=PAN_T) endIntro(); }
+  }
+  function renderIntro(){
+    var cls=(refReady&&baseUp)?"flip180":""; if(cv.className!==cls) cv.className=cls; // 依基準讓畫面永遠正向
+    ctx.clearRect(0,0,W,H); ctx.textBaseline="top"; ctx.textAlign="left";
+    ctx.font=fontSize+"px monospace";
+    for(var y=0;y<H;y+=cellH){ txt("[#]",0,y,"#3B6EF5"); txt("[#]",W-wallW,y,"#3B6EF5"); }
+    var panOff=(introPhase==="pan")?introEase(Math.min(1,panT/PAN_T))*panDist:0, topY=mTopY0+panOff;
+    ctx.font=mFont+"px monospace";
+    for(var i=0;i<MACHINE.length;i++){
+      var heat=0.5+0.5*Math.sin(introT*6+i*0.8);
+      txt(MACHINE[i], mX, topY+i*mLineH, lerpCol([255,210,0],[255,70,0],heat));
+    }
+    ctx.font=Math.round(fontSize*0.9)+"px monospace";
+    for(var k=0;k<gas.length;k++){
+      var gg=gas[k], a=Math.max(0,1-gg.age/gg.life);
+      ctx.globalAlpha=a*0.9;
+      txt("氣", gg.x, gg.y, lerpCol([255,150,0],[255,60,0],0.5+0.5*Math.sin(gg.age*7+k)));
+    }
+    ctx.globalAlpha=1;
+  }
+  function introLoop(t){
+    if(state!=="intro") return;
+    var dt=Math.min(0.05,(t-lastT)/1000); lastT=t;
+    updateIntro(dt); renderIntro(); requestAnimationFrame(introLoop);
+  }
+  function endIntro(){
+    state="count";
+    var cs=document.getElementById("countScreen");
+    cs.classList.toggle("flip180",refReady&&baseUp);
+    cs.classList.remove("hidden");
+    countLeft=3; document.getElementById("countNum").textContent=countLeft;
     clearInterval(countTimer);
     countTimer=setInterval(function(){
       countLeft--;
       if(countLeft>0) document.getElementById("countNum").textContent=countLeft;
       if(countLeft<=0){
         clearInterval(countTimer); clearInterval(detectTimer);
-        document.getElementById("countScreen").classList.add("hidden");
+        cs.classList.add("hidden");
         startPlay();
       }
     },1000);
@@ -267,8 +380,14 @@
   }
 
   function update(dt){
+    animT+=dt;
     if(hurtCd>0) hurtCd-=dt;
     updateOrientation(dt);
+    if(machinePlat){                          // 機台噴氣
+      playGasAcc+=dt;
+      while(playGasAcc>0.09){ playGasAcc-=0.09; spawnGas(machinePlat.x,machinePlat.w,machinePlat.y); }
+      for(var gi=gas.length-1;gi>=0;gi--){ var g=gas[gi]; g.age+=dt; g.y-=g.vy*dt; g.x+=g.vx*dt; g.vy*=(1-0.5*dt); if(g.age>=g.life) gas.splice(gi,1); }
+    }
     // 左右：手機顛倒時觸控座標對調 → 依絕對朝向反轉
     var dir = upsideDown?-moveDir:moveDir;
     char.x+=dir*MOVE*dt;
@@ -318,10 +437,11 @@
 
   function land(p){
     if(p.id!==lastLanded){
+      if(p.type==="machine"){ lastLanded=p.id; doWin(); return; }  // 跳上機台＝破關
       lastLanded=p.id; floor++; score++;
       if(p.type==="spike") hurt();
       else if(p.type==="heal") heal(p);
-      if(climbing && floor>=69) doWin();
+      if(climbing && floor>=WIN_FLOOR && !machineSpawned) spawnMachineAbove(p); // 抵達 69F，機台現身於上方
     }
   }
   function respawnDown(){ hurt(); if(state!=="play")return;
@@ -339,9 +459,23 @@
     for(var y=ceilingY;y<H;y+=cellH){ txt("[#]",0,y,"#3B6EF5"); txt("[#]",W-wallW,y,"#3B6EF5"); }
     for(var i=0;i<platforms.length;i++){
       var p=platforms[i], n=Math.max(1,Math.round(p.w/charW));
+      if(p.type==="machine"){                 // 過載機台：圖形自落點往下延伸，角色站頂端
+        ctx.font=mFont+"px monospace";
+        for(var mi=0;mi<MACHINE.length;mi++){
+          txt(MACHINE[mi], p.x, p.y+mi*mLineH, lerpCol([255,210,0],[255,70,0],0.5+0.5*Math.sin(animT*6+mi*0.8)));
+        }
+        ctx.font=fontSize+"px monospace";
+        continue;
+      }
       if(p.type==="spike") txt(rep("^",n),p.x+charW,p.y-fontSize,"#FFFFFF");
       else if(p.type==="heal" && !p.used) txt("血",p.x+p.w/2-bloodW/2,p.y-fontSize,"#FF4D4D");
       txt("["+rep(p.letter,n)+"]",p.x,p.y,"#FFFFFF");
+    }
+    if(gas.length){                           // 機台噴出的氣
+      ctx.font=Math.round(fontSize*0.9)+"px monospace";
+      for(var gk=0;gk<gas.length;gk++){ var gg=gas[gk], ga=Math.max(0,1-gg.age/gg.life);
+        ctx.globalAlpha=ga*0.9; txt("氣",gg.x,gg.y,lerpCol([255,150,0],[255,60,0],0.5+0.5*Math.sin(gg.age*7+gk))); }
+      ctx.globalAlpha=1; ctx.font=fontSize+"px monospace";
     }
     txt("웃",char.x,char.y,"#FFD400");
     // HUD
@@ -354,26 +488,19 @@
   }
 
   function doWin(){ state="win";
-    document.getElementById("winTitle").innerHTML="恭喜你找到 BUG 囉！<div class=\"subtag\">69F · 出口</div>";
+    document.getElementById("winTitle").innerHTML="MISSION COMPLETE<div class=\"subtag\">PRESSURE SOURCE IDENTIFIED</div>";
     document.getElementById("winBody").innerHTML=
-      '<div class="tag" style="margin-bottom:0;">給一成不變的生活來點 BUG 吧！</div>'+
-      '<div class="quote">「適度的打破一些生活規則，透過不一樣的體驗，讓你的生活變得更有新鮮感」</div>'+
-      '<div class="giftBox">＊贈品示意圖</div>'+
-      '<div class="cta">即刻領取解鎖生活 BUG 包</div>'+
-      '<div class="redeemForm">'+
-        '<div><label>選擇最近的超商</label>'+
-          '<select id="storeSelect"><option value="">請選擇超商</option>'+
-          '<option>7-ELEVEN</option><option>全家 FamilyMart</option>'+
-          '<option>萊爾富 Hi-Life</option><option>OK超商</option></select></div>'+
-        '<div><label>電話</label><input type="tel" placeholder="請輸入手機號碼" id="phoneInput"></div>'+
-        '<div><label>領取人</label><input type="text" placeholder="請輸入領取人姓名" id="nameInput"></div>'+
-      '</div>'+
-      '<div class="formNote">＊採超商店到店的方式兌換（示意畫面，尚未串接送出）</div>';
+      '<div class="body" style="margin-top:0;">機房過載，會發出訊號，會被及時處理。<br>你的過載，也該被看見、被釋放。</div>'+
+      '<div class="cta" style="margin-top:16px;">ENJOY MORE PLEASURE.</div>'+
+      '<div class="quote" style="margin-top:4px;">今晚，享受屬於你的歡愉時刻。</div>'+
+      '<button class="ctaBtn">&gt; 前往 SWAG</button>'+
+      '<button class="ctaBtn">&gt; 綁定 Google 帳號，立即領取 5,000 體驗點數，再抽實體解壓禮包</button>'+
+      '<div class="formNote">＊示意畫面，尚未串接</div>';
     var ws=document.getElementById("winScreen");
     ws.classList.remove("flip180");   // 破關訊息一律用正常方向顯示，輸入框/下拉選單才能正常操作
     ws.classList.remove("hidden"); }
   function gameOver(){ state="over";
-    document.getElementById("overBody").innerHTML=(climbing?("爬到 "+floor+"F"):("下降到 B"+floor))+"<br>五滴血用完了。";
+    document.getElementById("overBody").innerHTML=(climbing?("推進至 "+floor+"F"):("下探至 B"+floor))+"<br>能量耗盡，解壓任務中止。";
     var os=document.getElementById("overScreen");
     os.classList.toggle("flip180",upsideDown);
     os.classList.remove("hidden"); }
@@ -394,7 +521,7 @@
   document.addEventListener("keyup",function(e){ if(e.key==="ArrowLeft"||e.key==="ArrowRight")moveDir=0; });
 
   function backToTitle(){ document.getElementById("titleScreen").classList.remove("hidden"); cv.className=""; state="title"; }
-  document.getElementById("startBtn").addEventListener("click",startCountdown);
+  document.getElementById("startBtn").addEventListener("click",startIntro);
   document.getElementById("againBtn").addEventListener("click",function(){ document.getElementById("winScreen").classList.add("hidden"); backToTitle(); });
   document.getElementById("retryBtn").addEventListener("click",function(){ document.getElementById("overScreen").classList.add("hidden"); backToTitle(); });
 })();
